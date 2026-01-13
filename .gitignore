@@ -1,0 +1,29 @@
+cat > .gitignore <<'EOF'
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+.venv-build/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Build outputs
+build/
+dist/
+*.spec
+*.dmg
+*.exe
+*.msi
+*.zip
+*.log
+
+# Optional: local env files
+.env
+EOF
