@@ -43,15 +43,17 @@ jobs:
         if: matrix.os == 'macos-latest'
         shell: bash
         run: |
+          # Build .app
           pyinstaller app.py \
             --name TimeFlow \
             --noconfirm \
             --windowed \
             --add-data "timeflow_assets:timeflow_assets"
 
+          # Create DMG
           mkdir -p staging
           cp -R "dist/TimeFlow.app" "staging/TimeFlow.app"
-
+          
           hdiutil create \
             -volname "TimeFlow" \
             -srcfolder "staging" \
@@ -71,7 +73,8 @@ jobs:
             --windowed `
             --onefile `
             --add-data "timeflow_assets;timeflow_assets"
-
+          
+          # Rename for clarity
           Copy-Item "dist\TimeFlow.exe" "TimeFlow-Windows-$env:VERSION.exe"
 
       - name: Upload artifacts
