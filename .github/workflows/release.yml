@@ -43,11 +43,13 @@ jobs:
         if: matrix.os == 'macos-latest'
         shell: bash
         run: |
-          # Build .app
+          # Build .app mit Icon
+          # Stelle sicher, dass TimeFlowIcon.png in timeflow_assets/ existiert!
           pyinstaller app.py \
             --name TimeFlow \
             --noconfirm \
             --windowed \
+            --icon="timeflow_assets/TimeFlowIcon.png" \
             --add-data "timeflow_assets:timeflow_assets"
 
           # Create DMG
@@ -67,11 +69,15 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
+          # Build .exe mit Icon
+          # Stelle sicher, dass TimeFlowIcon.ico in timeflow_assets/ existiert!
+          # Beachte den Backslash \ für den Windows-Pfad
           pyinstaller app.py `
             --name TimeFlow `
             --noconfirm `
             --windowed `
             --onefile `
+            --icon="timeflow_assets\TimeFlowIcon.ico" `
             --add-data "timeflow_assets;timeflow_assets"
           
           # Rename for clarity
