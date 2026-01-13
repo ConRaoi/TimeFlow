@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
     QFrame, QTableView, QAbstractItemView, QComboBox, QSizePolicy, QHeaderView
 )
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QResizeEvent
 
 from .pie_widget import PieWidget
 from .delegates import MinutesDelegate
@@ -15,6 +15,8 @@ class Card(QFrame):
     def __init__(self, title: str = "") -> None:
         super().__init__()
         self.setObjectName("Card")
+        # WICHTIG: Standardmäßig immer "Box-Look" (Weiß mit Rand). 
+        # Das verhindert Glitches beim Umschalten.
         self.setProperty("compact", False) 
         
         self._title = QLabel(title)
@@ -33,6 +35,8 @@ class Card(QFrame):
         return self._root
     
     def set_compact_mode(self, is_compact: bool):
+        # Wir nutzen diese Funktion nur noch für CSS-Logik, falls nötig.
+        # Aber wir vermeiden das flackernde Umschalten des Hintergrunds.
         self.setProperty("compact", is_compact)
         self.style().unpolish(self)
         self.style().polish(self)
@@ -50,7 +54,6 @@ class SegmentsView(Card):
 
         self.language_label = QLabel()
         self.language_combo = QComboBox()
-        # FIX: Automatische Anpassung an den Inhalt (lange Wörter wie "Runterzählen")
         self.language_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         
         for code, label in SUPPORTED_LANGS:
@@ -58,9 +61,7 @@ class SegmentsView(Card):
 
         self.mode_label = QLabel()
         self.mode_combo = QComboBox()
-        # FIX: Auch hier Anpassung an Inhalt aktivieren
         self.mode_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-        
         self.mode_combo.addItem("Count down", userData="countdown")
         self.mode_combo.addItem("Count up", userData="countup")
 
@@ -69,7 +70,6 @@ class SegmentsView(Card):
         self.setup_layout.addWidget(self.mode_label, 0, 2)
         self.setup_layout.addWidget(self.mode_combo, 0, 3)
         
-        # Table
         self.view = QTableView()
         self.view.setModel(self.model)
         self.view.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -85,11 +85,9 @@ class SegmentsView(Card):
         self.view.setShowGrid(False)
         self.view.setAlternatingRowColors(False)
 
-        # Buttons
         self.btn_add = QPushButton()
         self.btn_remove = QPushButton()
         
-        # Buttons Styling
         text_btn_style = """
             QPushButton { 
                 font-size: 13px; 
@@ -114,7 +112,6 @@ class SegmentsView(Card):
     def retranslate(self, lang_code: str):
         s = get_strings(lang_code)
         self._title.setText(s.segments_label)
-        
         self.language_label.setText(f"{s.language_label}:")
         self.mode_label.setText(f"{s.mode_label}:")
         self.mode_combo.setItemText(0, s.mode_countdown)
@@ -124,6 +121,7 @@ class SegmentsView(Card):
         self.model.set_headers(s.col_name, s.col_minutes)
 
     def update_layout_sizing(self, compact: bool):
+        # SegmentsView schalten wir optisch um (Header kleiner etc.)
         self.set_compact_mode(compact)
         
         if compact:
@@ -150,7 +148,8 @@ class TimerView(Card):
         self.time_label = QLabel("00:00")
         self.time_label.setObjectName("TimeLabel")
         self.time_label.setAlignment(Qt.AlignCenter)
-        self.time_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        # FIX: Korrekter Name ist "Ignored", nicht "Ignoring"
+        self.time_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
 
         self.time_caption = QLabel()
         self.time_caption.setObjectName("TimeCaption")
@@ -179,6 +178,7 @@ class TimerView(Card):
         self.ctrl_row.addWidget(self.btn_pause)
         self.ctrl_row.addWidget(self.btn_reset)
 
+        # Layout Aufbau mit Stretch Factors
         self.body_layout().addStretch(1)
         self.body_layout().addWidget(self.time_label)
         self.body_layout().addWidget(self.time_caption)
@@ -196,7 +196,10 @@ class TimerView(Card):
         self.time_caption.setText(text_caption)
         self.current_segment_label.setText(text_current)
         self.next_segment_label.setText(text_next)
-        self.next_segment_label.setVisible(bool(text_next))
+        
+        # Nur anzeigen, wenn Text da ist UND wir nicht im Tiny-Mode sind
+        if self.next_segment_label.isVisible():
+            self.next_segment_label.setVisible(bool(text_next))
 
     def set_tiny_mode(self, tiny: bool, lang_code: str):
         s = get_strings(lang_code)
@@ -205,25 +208,32 @@ class TimerView(Card):
         self.btn_pause.setToolTip(s.pause)
         self.btn_reset.setToolTip(s.reset)
 
+        # Wir blenden nur Elemente aus, ändern aber nicht den Card-Style
         if tiny:
-            self.set_compact_mode(True)
             self.time_caption.hide()
             self.current_segment_label.hide()
             self.next_segment_label.hide()
         else:
-            self.set_compact_mode(False)
             self.time_caption.show()
             self.current_segment_label.show()
             if self.next_segment_label.text():
                 self.next_segment_label.show()
+        
+        self.updateGeometry()
 
-    def update_typography(self, w: int, h: int, scale_factor: float):
-        safe_h = max(300, h)
-        time_px = int(clamp(safe_h * 0.18, 40, 110))
-        caption_px = int(clamp(safe_h * 0.035, 11, 16))
-        current_px = int(clamp(safe_h * 0.045, 13, 24))
-        next_px = int(clamp(safe_h * 0.035, 11, 16))
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        
+        # Dynamische Berechnung basierend auf EIGENER Höhe
+        h = self.height()
+        
+        # Typografie-Regeln
+        time_px = int(clamp(h * 0.18, 40, 110))
+        caption_px = int(clamp(h * 0.035, 11, 16))
+        current_px = int(clamp(h * 0.045, 13, 24))
+        next_px = int(clamp(h * 0.035, 11, 16))
 
+        # Fonts anwenden
         f = QFont()
         f.setPixelSize(time_px)
         f.setWeight(QFont.Weight.Bold)

@@ -11,17 +11,11 @@ class MinutesDelegate(QStyledItemDelegate):
         spin.setSingleStep(0.5)
         spin.setAlignment(Qt.AlignCenter)
         
-        # FIX: Wir verzichten auf setStyleSheet für das SpinBox-Widget.
-        # Sobald man background/border stylt, schaltet Qt in den "Custom Modus" 
-        # und die nativen Pfeile verschwinden (außer man lädt eigene Bilder).
-        # Durch Weglassen des Stylesheets nutzen wir die nativen OS-Controls (System-Look),
-        # was garantiert, dass Pfeile sichtbar und klickbar sind.
-        
+        # Native Look behalten (kein setStyleSheet), damit OS-Pfeile sichtbar sind.
         spin.setButtonSymbols(QAbstractSpinBox.PlusMinus)
         spin.setKeyboardTracking(False) 
         
-        # Optional: Nur Font stylen, aber keine Rahmen/Hintergründe, 
-        # um native Pfeile zu behalten.
+        # Nur Font anpassen für Lesbarkeit, Rest bleibt Systemstandard
         font = spin.font()
         font.setBold(True)
         spin.setFont(font)
@@ -41,5 +35,4 @@ class MinutesDelegate(QStyledItemDelegate):
 
     def updateEditorGeometry(self, editor, option, index):
         r = option.rect
-        # Ein kleines bisschen Padding, damit es sauber in der Zelle sitzt
         editor.setGeometry(r.adjusted(2, 2, -2, -2))

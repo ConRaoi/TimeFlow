@@ -14,21 +14,16 @@ from .timer_engine import TimerEngine, TimerState
 from .segments_model import SegmentsModel, Segment
 from .utils import format_mmss, clamp, resource_path
 from .views import SegmentsView, TimerView
-
-# FIX: Importiert jetzt die korrekten Konstanten aus styles.py
 from .styles import (
     TINY_WIDTH_LIMIT, TINY_HEIGHT_LIMIT, 
     COMPACT_WIDTH_LIMIT, COMPACT_HEIGHT_LIMIT,
     MARGIN_STD, MARGIN_COMPACT, 
-    SPACING_STD, SPACING_COMPACT,
-    SCALE_BASE_W, SCALE_BASE_H
+    SPACING_STD, SPACING_COMPACT
 )
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        
-        # FIX: ObjectName setzen für CSS-Targeting (verhindert graue Hintergründe in Child-Widgets)
         self.setObjectName("TimeFlowMain")
 
         self.settings = QSettings("TimeFlow", "TimeFlow")
@@ -145,12 +140,12 @@ class MainWindow(QWidget):
         w = self.width()
         h = self.height()
         
+        # Grenzwerte prüfen
         is_tiny = (w < TINY_WIDTH_LIMIT) or (h < TINY_HEIGHT_LIMIT)
-        # FIX: Nutzung der korrekten Konstante
         compact_mode = (w < COMPACT_WIDTH_LIMIT) 
         focus_active = self.focus_btn.isChecked()
 
-        # 1. Sichtbarkeit
+        # 1. Sichtbarkeit steuern
         if is_tiny:
             self.segments_view.setVisible(False)
             self.focus_btn.setVisible(False)
@@ -160,22 +155,22 @@ class MainWindow(QWidget):
             self.focus_btn.setVisible(True)
             self.pin_btn.setVisible(True)
 
-        # 2. Layout Richtung
+        # 2. Layout Richtung (Responsive)
         if self.segments_view.isVisible() and compact_mode:
             self.cards_layout.setDirection(QBoxLayout.TopToBottom)
         else:
             self.cards_layout.setDirection(QBoxLayout.LeftToRight)
 
-        # 3. Margins
+        # 3. Margins anpassen
         margin = MARGIN_COMPACT if is_tiny else MARGIN_STD
         spacing = SPACING_COMPACT if is_tiny else SPACING_STD
         self.root.setContentsMargins(margin, margin, margin, margin)
         self.root.setSpacing(spacing)
 
-        # 4. Updates
-        scale = clamp(h / 600.0, 0.6, 1.3)
+        # 4. Updates an Views weitergeben
+        # FIX: Wir übergeben kein `scale` mehr und rufen kein `update_typography` manuell auf.
+        # Der TimerView macht das jetzt selbst via resizeEvent.
         self.timer_view.set_tiny_mode(is_tiny, self.current_lang())
-        self.timer_view.update_typography(w, h, scale)
         self.segments_view.update_layout_sizing(compact_mode)
         self._update_focus_button_text()
 
@@ -220,15 +215,10 @@ class MainWindow(QWidget):
                 return
 
     def on_language_changed(self):
-        # FIX: Alte Sprache merken, um Segmente intelligent zu übersetzen
         old_lang = self.settings.value("language", "de")
         new_lang = self.current_lang()
-        
         self.settings.setValue("language", new_lang)
-        
-        # Segmente übersetzen, wenn sie noch Originalzustand haben
         self._translate_segments_if_defaults(old_lang, new_lang)
-
         self.apply_language(new_lang, False)
         self.on_segments_changed()
         self.on_tick(self._make_state_for_ui())
@@ -258,24 +248,19 @@ class MainWindow(QWidget):
             s = get_strings(lang_code)
             self.segments_model.set_segments([Segment(n, m) for (n, m) in s.default_segments])
 
-    # FIX: Neue Logik für Segment-Übersetzung beim Sprachwechsel
     def _translate_segments_if_defaults(self, old_lang: str, new_lang: str):
         if old_lang == new_lang:
             return
-
         current_segments = self.segments_model.segments()
         old_defaults = get_strings(old_lang).default_segments
-        
         if len(current_segments) != len(old_defaults):
             return
-
         is_identical = True
         for i, (name, minutes) in enumerate(old_defaults):
             seg = current_segments[i]
             if seg.name != name or abs(seg.minutes - minutes) > 0.001:
                 is_identical = False
                 break
-        
         if is_identical:
             new_defaults = get_strings(new_lang).default_segments
             self.segments_model.set_segments([Segment(n, m) for (n, m) in new_defaults])
@@ -283,7 +268,6 @@ class MainWindow(QWidget):
     def add_segment(self):
         row = self.segments_model.rowCount()
         self.segments_model.insertRows(row, 1)
-        s = get_strings(self.current_lang())
         self.segments_model.setData(self.segments_model.index(row, 0), "Segment", Qt.EditRole)
         self.segments_view.view.selectRow(row)
 
