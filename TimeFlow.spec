@@ -1,10 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
+    # Hier werden die Assets eingebunden. Tuple-Format ist (Quelle, Ziel)
     datas=[('timeflow_assets', 'timeflow_assets')],
     hiddenimports=[],
     hookspath=[],
@@ -12,40 +12,30 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
-    optimize=0,
 )
 pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
     a.scripts,
+    # Für OneFile müssen binaries, zipfiles und datas HIER rein:
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='TimeFlow',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False, # Kein schwarzes Konsolenfenster
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['timeflow_assets/TimeFlowIcon.png'],
-)
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='TimeFlow',
-)
-app = BUNDLE(
-    coll,
-    name='TimeFlow.app',
-    icon='timeflow_assets/TimeFlowIcon.png',
-    bundle_identifier=None,
+    # Windows Icon (wird auf Mac ignoriert oder fallback)
+    icon='timeflow_assets/TimeFlowIcon.ico'
 )
