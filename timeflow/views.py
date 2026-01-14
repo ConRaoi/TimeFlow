@@ -236,12 +236,12 @@ class TimerView(Card):
         self.body_layout().addStretch(1)
         self.body_layout().addWidget(self.time_label)
         self.body_layout().addWidget(self.time_caption)
-        self.body_layout().addSpacing(10)
+        self.body_layout().addSpacing(6)
         self.body_layout().addWidget(self.current_segment_label)
         self.body_layout().addWidget(self.next_segment_label)
-        self.body_layout().addSpacing(10)
+        self.body_layout().addSpacing(6)
         self.body_layout().addWidget(self.pie, 10) 
-        self.body_layout().addSpacing(10)
+        self.body_layout().addSpacing(6)
         self.body_layout().addLayout(self.ctrl_row)
         self.body_layout().addStretch(1)
 
@@ -251,9 +251,8 @@ class TimerView(Card):
         self.current_segment_label.setText(text_current)
         self.next_segment_label.setText(text_next)
         
-        # Nur anzeigen, wenn Text da ist UND wir nicht im Tiny-Mode sind
-        if self.next_segment_label.isVisible():
-            self.next_segment_label.setVisible(bool(text_next))
+        # Sicherstellen, dass die Sichtbarkeit korrekt gesetzt ist
+        self.next_segment_label.setVisible(bool(text_next))
 
     def set_tiny_mode(self, tiny: bool, lang_code: str):
         s = get_strings(lang_code)
@@ -286,8 +285,8 @@ class TimerView(Card):
         # Typografie-Regeln
         time_px = int(clamp(h * 0.18, 40, 110))
         caption_px = int(clamp(h * 0.035, 11, 16))
-        current_px = int(clamp(h * 0.045, 13, 24))
-        next_px = int(clamp(h * 0.035, 11, 16))
+        current_px = int(clamp(h * 0.048, 14, 26))
+        next_px = int(clamp(h * 0.038, 11, 18))
 
         # Fonts anwenden
         f = QFont()

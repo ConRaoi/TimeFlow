@@ -63,6 +63,7 @@ class HelpWindow(QDialog):
         self.browser.setFont(QFont(font_name, 13))
 
         layout.addWidget(self.browser)
+        self.anchor_map: dict[str, str] = {}
         self._load_readme()
 
     def _load_readme(self) -> None:
@@ -83,6 +84,15 @@ class HelpWindow(QDialog):
         
         if not content:
             content = "# Fehler\nREADME.md konnte nicht geladen werden."
+
+        # ANCHOR MAPPING: Wir extrahieren manuelle Anker und ihr Ziel
+        # Beispiel: <a name="faq-de"></a>### FAQ...
+        import re
+        self.anchor_map.clear()
+        # Findet <a name="xyz"></a> gefolgt von optionalen Header-Zeichen und dem Text
+        anchors = re.findall(r'<a name="([^"]+)"></a>\s*(?:###?\s*)?([^#\n\r<]+)', content)
+        for name, text in anchors:
+            self.anchor_map[name] = text.strip()
 
         # NATIVES RENDERING - Kein HTML-Gebastel
         self.browser.setMarkdown(content)
@@ -113,9 +123,10 @@ class HelpWindow(QDialog):
         Wir ignorieren HTML-Anker. Wir laufen durch die Dokument-Struktur (Blöcke)
         und suchen nach einer Überschrift, deren Text zum Link passt.
         """
-        
-        # Suchbegriff reinigen: "-deutsch" -> "deutsch"
-        target_clean = self._clean_text(anchor_text)
+        # 1. Prüfen: Haben wir dieses Ziel in unserer Map?
+        # Wenn ja, nutzen wir den dort hinterlegten Text für die Suche.
+        target_text = self.anchor_map.get(anchor_text, anchor_text)
+        target_clean = self._clean_text(target_text)
         
         doc = self.browser.document()
         block = doc.begin()

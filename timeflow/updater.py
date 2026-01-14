@@ -39,16 +39,22 @@ class UpdateWorker(QObject):
                 data = response.json()
                 latest_tag = data.get("tag_name", "").lstrip("v")
                 
-                # Versionen vergleichen
-                if version.parse(latest_tag) > version.parse(CURRENT_VERSION):
-                    download_url = self._get_url_for_os(data.get("assets", []))
-                    if download_url:
-                        notes = data.get("body", "Keine Details verfügbar.")
-                        self.updateAvailable.emit(latest_tag, download_url, notes)
+                # Versionen sicher vergleichen
+                try:
+                    local_v = version.parse(CURRENT_VERSION)
+                    remote_v = version.parse(latest_tag)
+                    
+                    if remote_v > local_v:
+                        download_url = self._get_url_for_os(data.get("assets", []))
+                        if download_url:
+                            notes = data.get("body", "Keine Details verfügbar.")
+                            self.updateAvailable.emit(latest_tag, download_url, notes)
+                        else:
+                            self.noUpdate.emit() 
                     else:
-                        # Update da, aber keine passende Datei (dmg/exe) gefunden
-                        self.noUpdate.emit() 
-                else:
+                        self.noUpdate.emit()
+                except Exception as ve:
+                    print(f"[Updater] Versionsfehler: {ve}")
                     self.noUpdate.emit()
             else:
                 # Server-Fehler oder Rate Limit, wir ignorieren es stillschweigend

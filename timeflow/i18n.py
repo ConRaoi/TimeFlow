@@ -46,6 +46,11 @@ class Strings:
     confirm_delete: str
     new_segment_default: str # Default name for new segments
 
+    # Noise Meter
+    noise_meter: str
+    sensitivity: str
+    limit: str
+
 _STRINGS = {
     "en": Strings(
         app_title="TimeFlow",
@@ -81,6 +86,9 @@ _STRINGS = {
         preset_deleted="Template deleted!",
         confirm_delete="Are you sure you want to delete this template?",
         new_segment_default="New segment",
+        noise_meter="Noise Meter",
+        sensitivity="Sensitivity",
+        limit="Limit",
     ),
     "de": Strings(
         app_title="TimeFlow",
@@ -116,6 +124,9 @@ _STRINGS = {
         preset_deleted="Vorlage gelöscht!",
         confirm_delete="Möchten Sie diese Vorlage wirklich löschen?",
         new_segment_default="Neuer Abschnitt",
+        noise_meter="Lärmampel",
+        sensitivity="Empfindlichkeit",
+        limit="Grenzwert",
     ),
     "es": Strings(
         app_title="TimeFlow",
@@ -151,6 +162,9 @@ _STRINGS = {
         preset_deleted="¡Plantilla eliminada!",
         confirm_delete="¿Seguro que quieres eliminar esta plantilla?",
         new_segment_default="Nuevo segmento",
+        noise_meter="Monitor de ruido",
+        sensitivity="Sensibilidad",
+        limit="Límite",
     ),
     "fr": Strings(
         app_title="TimeFlow",
@@ -186,6 +200,9 @@ _STRINGS = {
         preset_deleted="Modèle supprimé !",
         confirm_delete="Voulez-vous vraiment supprimer ce modèle ?",
         new_segment_default="Nouveau segment",
+        noise_meter="Moniteur de bruit",
+        sensitivity="Sensibilité",
+        limit="Limite",
     ),
 }
 

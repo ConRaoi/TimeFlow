@@ -68,16 +68,18 @@ def get_stylesheet(arrow_path: str = ""):
             background: transparent;
         }}
 
-        QLabel#TimeCaption, QLabel#NextSegment {{
+        QLabel#NextSegment {{
             color: #8E8E93;
             font-weight: 500;
             background: transparent;
+            padding: 2px 0;
         }}
 
         QLabel#CurrentSegment {{
             color: #1C1C1E;
             font-weight: 600;
             background: transparent;
+            padding: 4px 0;
         }}
 
         /* --- Action Buttons (Icons) --- */

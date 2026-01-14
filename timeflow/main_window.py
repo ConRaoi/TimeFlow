@@ -16,6 +16,7 @@ from .utils import format_mmss, clamp, resource_path
 from .views import SegmentsView, TimerView
 from .updater import UpdateWorker
 from .help_window import HelpWindow
+from .noise_meter_window import NoiseMeterWindow
 from .styles import (
     TINY_WIDTH_LIMIT, TINY_HEIGHT_LIMIT, 
     COMPACT_WIDTH_LIMIT, COMPACT_HEIGHT_LIMIT,
@@ -37,6 +38,7 @@ class MainWindow(QWidget):
         
         self._last_focus_size = QSize(TINY_WIDTH_LIMIT, 450) 
         self.help_window = None 
+        self.noise_window = None 
 
         # --- Sound Setup ---
         self.player = QMediaPlayer()
@@ -93,7 +95,46 @@ class MainWindow(QWidget):
         """)
         self.readme_btn.clicked.connect(self.on_readme_clicked)
 
-        # 3. Pin & Focus Buttons (Rechts)
+        # 3. Bug Report Button (Links)
+        self.bug_btn = QPushButton("🐞")
+        self.bug_btn.setToolTip("Fehler melden")
+        self.bug_btn.setFixedWidth(40)
+        self.bug_btn.setStyleSheet("""
+            QPushButton { 
+                background: transparent; 
+                color: #636366;
+                font-size: 20px; 
+                border: none;
+                border-radius: 8px; 
+            }
+            QPushButton:hover { 
+                background: rgba(0,0,0,0.05); 
+                color: #000;
+            }
+        """)
+        self.bug_btn.clicked.connect(self.on_bug_report_clicked)
+
+        # 4. Noise Meter Button
+        self.noise_btn = QPushButton("🎤")
+        self.noise_btn.setToolTip("Lärmampel")
+        self.noise_btn.setFixedWidth(40)
+        self.noise_btn.setObjectName("HeaderBtn")
+        self.noise_btn.setStyleSheet("""
+            QPushButton { 
+                background: transparent; 
+                color: #636366;
+                font-size: 20px; 
+                border: none;
+                border-radius: 8px; 
+            }
+            QPushButton:hover { 
+                background: rgba(0,0,0,0.05); 
+                color: #000;
+            }
+        """)
+        self.noise_btn.clicked.connect(self.on_noise_clicked)
+
+        # 5. Pin & Focus Buttons (Rechts)
         self.pin_btn = QPushButton("📍")
         self.pin_btn.setCheckable(True)
         self.pin_btn.setObjectName("PinBtn")
@@ -107,7 +148,9 @@ class MainWindow(QWidget):
         top_row = QHBoxLayout()
         top_row.addWidget(self.update_btn) # Ganz links 1
         top_row.addWidget(self.readme_btn) # Ganz links 2
+        top_row.addWidget(self.bug_btn)    # Ganz links 3
         top_row.addStretch(1)              # Platzhalter in der Mitte
+        top_row.addWidget(self.noise_btn)  # Rechts 0
         top_row.addWidget(self.pin_btn)    # Rechts 1
         top_row.addSpacing(10)
         top_row.addWidget(self.focus_btn)  # Rechts 2
@@ -122,8 +165,8 @@ class MainWindow(QWidget):
         self.cards_layout.addWidget(self.timer_view, 1)
 
         self.root = QVBoxLayout(self)
-        # Reduced margins: top=4, sides=10, bottom=10, spacing=6
-        self.root.setContentsMargins(10, 4, 10, 10)
+        # Reduced margins: top=2, sides=10, bottom=10, spacing=6
+        self.root.setContentsMargins(10, 2, 10, 10)
         self.root.setSpacing(6)
         self.root.addLayout(top_row)
         self.root.addLayout(self.cards_layout, 1)
@@ -199,6 +242,24 @@ class MainWindow(QWidget):
         self.help_window.raise_()
         self.help_window.activateWindow()
 
+    def on_bug_report_clicked(self):
+        """Öffnet den Google Docs Link zum Melden von Fehlern."""
+        url = "https://docs.google.com/document/d/1_tjE5-Xp1QtiKLHuTwQOFggJ29PdfzfS1wc3SaLrjCs/edit?tab=t.0"
+        QDesktopServices.openUrl(QUrl(url))
+
+    def on_noise_clicked(self):
+        """Öffnet das Fenster für den Lärmwächter."""
+        if self.noise_window is None:
+            self.noise_window = NoiseMeterWindow(self, self.current_lang())
+        
+        if self.noise_window.isVisible():
+            self.noise_window.hide()
+        else:
+            self.noise_window.show()
+            # Positionierung: In der Nähe des Buttons oder Zentriert
+            self.noise_window.raise_()
+            self.noise_window.activateWindow()
+
     # --- Updater Logic ---
     def _setup_updater(self):
         self.update_thread = QThread()
@@ -270,12 +331,16 @@ class MainWindow(QWidget):
             self.focus_btn.setVisible(False)
             self.pin_btn.setVisible(False)
             self.readme_btn.setVisible(False) 
+            self.bug_btn.setVisible(False)
             self.update_btn.setVisible(False)
+            self.noise_btn.setVisible(False)
         else:
             self.segments_view.setVisible(not focus_active)
             self.focus_btn.setVisible(True)
             self.pin_btn.setVisible(True)
             self.readme_btn.setVisible(True)
+            self.bug_btn.setVisible(True)
+            self.noise_btn.setVisible(True)
             if self._pending_update_url:
                 self.update_btn.setVisible(True)
 
@@ -286,7 +351,7 @@ class MainWindow(QWidget):
 
         margin = MARGIN_COMPACT if is_tiny else 10  # Reduced side margins
         spacing = SPACING_COMPACT if is_tiny else 6  # Reduced spacing
-        self.root.setContentsMargins(margin, 4, margin, margin)  # Reduced top margin
+        self.root.setContentsMargins(margin, 2, margin, margin)  # Reduced top margin
         self.root.setSpacing(spacing)
 
         self.timer_view.set_tiny_mode(is_tiny, self.current_lang())
@@ -352,6 +417,10 @@ class MainWindow(QWidget):
         self.segments_view.retranslate(lang_code)
         self.timer_view.set_tiny_mode(False, lang_code)
         self._ensure_localized_defaults(lang_code)
+        
+        if self.noise_window:
+            self.noise_window.retranslate(lang_code)
+            
         self._apply_responsive()
 
     def _update_focus_button_text(self):
