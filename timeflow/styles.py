@@ -18,9 +18,16 @@ SCALE_BASE_H = 400.0
 COLOR_START = (46, 204, 113)
 COLOR_END = (231, 76, 60)
 
+# Compatibility Constants (for dialogs)
+COLOR_PRIMARY = "#007AFF"
+TEXT_PRIMARY = "#111827"
+TEXT_SECONDARY = "#6B7280"
+BG_CARD = "#FFFFFF"
+BORDER_LIGHT = "#E6E8F0"
+
 FONT_FAMILY = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 
-def get_stylesheet():
+def get_stylesheet(arrow_path: str = ""):
     return f"""
         /* Hintergrund nur auf Hauptfenster anwenden */
         QWidget#TimeFlowMain {{

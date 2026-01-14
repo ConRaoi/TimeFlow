@@ -1,7 +1,8 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
-    QFrame, QTableView, QAbstractItemView, QComboBox, QSizePolicy, QHeaderView
+    QFrame, QTableView, QAbstractItemView, QComboBox, QSizePolicy, QHeaderView,
+    QMessageBox
 )
 from PySide6.QtGui import QFont, QResizeEvent
 
@@ -10,6 +11,8 @@ from .delegates import MinutesDelegate
 from .i18n import SUPPORTED_LANGS, get_strings
 from .utils import format_mmss, clamp
 from .styles import *
+from .presets_manager import PresetsManager
+from .presets_dialog import SavePresetDialog, ManagePresetsDialog
 
 class Card(QFrame):
     def __init__(self, title: str = "") -> None:
@@ -45,6 +48,7 @@ class SegmentsView(Card):
     def __init__(self, model):
         super().__init__("Segments")
         self.model = model
+        self.presets_manager = PresetsManager()
 
         # Setup Container (Sprache/Modus)
         self.setup_container = QWidget()
@@ -87,23 +91,32 @@ class SegmentsView(Card):
 
         self.btn_add = QPushButton()
         self.btn_remove = QPushButton()
+        self.btn_save = QPushButton()
+        self.btn_load = QPushButton()
         
         text_btn_style = """
             QPushButton { 
                 font-size: 13px; 
                 font-weight: 600; 
                 border-radius: 8px; 
-                padding: 6px 12px; 
-                min-width: 80px;
+                padding: 6px 16px; 
             }
         """
         self.btn_add.setStyleSheet(text_btn_style)
         self.btn_remove.setStyleSheet(text_btn_style)
+        self.btn_save.setStyleSheet(text_btn_style)
+        self.btn_load.setStyleSheet(text_btn_style)
         
         btn_row = QHBoxLayout()
         btn_row.addWidget(self.btn_add)
         btn_row.addWidget(self.btn_remove)
         btn_row.addStretch(1)
+        btn_row.addWidget(self.btn_save)
+        btn_row.addWidget(self.btn_load)
+
+        # Connect Preset Buttons
+        self.btn_save.clicked.connect(self.save_preset)
+        self.btn_load.clicked.connect(self.load_presets)
 
         self.body_layout().addWidget(self.setup_container)
         self.body_layout().addWidget(self.view, 1)
@@ -116,9 +129,46 @@ class SegmentsView(Card):
         self.mode_label.setText(f"{s.mode_label}:")
         self.mode_combo.setItemText(0, s.mode_countdown)
         self.mode_combo.setItemText(1, s.mode_countup)
-        self.btn_add.setText(s.add_segment)
-        self.btn_remove.setText(s.remove_segment)
+        
+        self.btn_add.setText(f"➕ {s.add_segment}")
+        self.btn_remove.setText(f"➖ {s.remove_segment}")
+        self.btn_save.setText(f"💾 {s.save_preset}")
+        self.btn_load.setText(f"📂 {s.presets_label}")
+        
+        self.btn_save.setToolTip(s.save_preset)
+        self.btn_load.setToolTip(s.manage_presets)
+        
         self.model.set_headers(s.col_name, s.col_minutes)
+
+    def save_preset(self):
+        lang_code = self.language_combo.currentData()
+        s = get_strings(lang_code)
+        dlg = SavePresetDialog(self, lang_code)
+        if dlg.exec():
+            name = dlg.preset_name
+            if name:
+                segments = self.model.segments()
+                data = [{"name": seg.name, "minutes": seg.minutes} for seg in segments]
+                self.presets_manager.save_preset(name, data)
+                QMessageBox.information(self, s.app_title, s.preset_saved)
+
+    def load_presets(self):
+        lang_code = self.language_combo.currentData()
+        s = get_strings(lang_code)
+        dlg = ManagePresetsDialog(self.presets_manager, self, lang_code)
+        if dlg.exec():
+            loaded = dlg.loaded_segments
+            if loaded:
+                from .segments_model import Segment
+                new_segs = []
+                for d in loaded:
+                    if isinstance(d, dict):
+                        new_segs.append(Segment(d["name"], d["minutes"]))
+                    elif isinstance(d, (list, tuple)) and len(d) >= 2:
+                        new_segs.append(Segment(d[0], d[1]))
+                if new_segs:
+                    self.model.set_segments(new_segs)
+                    QMessageBox.information(self, s.app_title, s.preset_loaded)
 
     def update_layout_sizing(self, compact: bool):
         # SegmentsView schalten wir optisch um (Header kleiner etc.)
@@ -168,14 +218,18 @@ class TimerView(Card):
         self.pie = PieWidget()
         self.pie.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.btn_start = QPushButton("▶")
-        self.btn_pause = QPushButton("⏸")
-        self.btn_reset = QPushButton("↺")
+        self.btn_start = QPushButton("▶️")
+        self.btn_pause = QPushButton("⏸️")
+        self.btn_reset = QPushButton("🔄")
+        self.btn_prev = QPushButton("⏮️")
+        self.btn_next = QPushButton("⏭️")
 
         self.ctrl_row = QHBoxLayout()
         self.ctrl_row.setSpacing(12)
+        self.ctrl_row.addWidget(self.btn_prev)
         self.ctrl_row.addWidget(self.btn_start)
         self.ctrl_row.addWidget(self.btn_pause)
+        self.ctrl_row.addWidget(self.btn_next)
         self.ctrl_row.addWidget(self.btn_reset)
 
         # Layout Aufbau mit Stretch Factors
@@ -207,6 +261,8 @@ class TimerView(Card):
         self.btn_start.setToolTip(s.start)
         self.btn_pause.setToolTip(s.pause)
         self.btn_reset.setToolTip(s.reset)
+        self.btn_prev.setToolTip(s.prev_segment if hasattr(s, 'prev_segment') else "Previous")
+        self.btn_next.setToolTip(s.next_segment if hasattr(s, 'next_segment') else "Next")
 
         # Wir blenden nur Elemente aus, ändern aber nicht den Card-Style
         if tiny:

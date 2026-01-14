@@ -1,12 +1,12 @@
 from __future__ import annotations
 import os
 
-from PySide6.QtCore import QSettings, Qt, QSignalBlocker, QUrl, QSize, QTimer
+from PySide6.QtCore import QSettings, Qt, QSignalBlocker, QUrl, QSize, QTimer, QThread, Signal
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QBoxLayout, 
-    QAbstractItemView, QApplication
+    QAbstractItemView, QApplication, QMessageBox
 )
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QDesktopServices
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 from .i18n import get_strings
@@ -14,14 +14,19 @@ from .timer_engine import TimerEngine, TimerState
 from .segments_model import SegmentsModel, Segment
 from .utils import format_mmss, clamp, resource_path
 from .views import SegmentsView, TimerView
+from .updater import UpdateWorker
+from .help_window import HelpWindow
 from .styles import (
     TINY_WIDTH_LIMIT, TINY_HEIGHT_LIMIT, 
     COMPACT_WIDTH_LIMIT, COMPACT_HEIGHT_LIMIT,
     MARGIN_STD, MARGIN_COMPACT, 
-    SPACING_STD, SPACING_COMPACT
+    SPACING_STD, SPACING_COMPACT,
+    get_stylesheet
 )
 
 class MainWindow(QWidget):
+    start_download_signal = Signal(str)
+
     def __init__(self):
         super().__init__()
         self.setObjectName("TimeFlowMain")
@@ -31,6 +36,7 @@ class MainWindow(QWidget):
         self.segments_model = SegmentsModel()
         
         self._last_focus_size = QSize(TINY_WIDTH_LIMIT, 450) 
+        self.help_window = None 
 
         # --- Sound Setup ---
         self.player = QMediaPlayer()
@@ -43,22 +49,68 @@ class MainWindow(QWidget):
         self.audio_output.setVolume(1.0)
         self.engine.finished.connect(self.play_alarm)
 
+        # --- Updater Setup ---
+        self._setup_updater()
+
         # --- UI Setup ---
+        
+        # 1. Update Button (Links)
+        self.update_btn = QPushButton("🚀")
+        self.update_btn.setVisible(False) 
+        self.update_btn.setToolTip("Update verfügbar!")
+        self.update_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #10B981;
+                border: 1px solid #059669;
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                padding: 6px 10px;
+                min-width: 30px;
+                margin-right: 5px;
+            }
+            QPushButton:hover { background-color: #059669; }
+        """)
+        self.update_btn.clicked.connect(self.on_update_clicked)
+        self._pending_update_url = None
+
+        # 2. Readme Button (Links)
+        self.readme_btn = QPushButton("📑")
+        self.readme_btn.setToolTip("Hilfe / Anleitung")
+        self.readme_btn.setFixedWidth(40)
+        self.readme_btn.setStyleSheet("""
+            QPushButton { 
+                background: transparent; 
+                color: #636366;
+                font-size: 20px; 
+                border: none;
+                border-radius: 8px; 
+            }
+            QPushButton:hover { 
+                background: rgba(0,0,0,0.05); 
+                color: #000;
+            }
+        """)
+        self.readme_btn.clicked.connect(self.on_readme_clicked)
+
+        # 3. Pin & Focus Buttons (Rechts)
         self.pin_btn = QPushButton("📍")
         self.pin_btn.setCheckable(True)
         self.pin_btn.setObjectName("PinBtn")
-        self.pin_btn.setToolTip("Always on Top")
         self.pin_btn.setFixedWidth(40)
 
         self.focus_btn = QPushButton()
         self.focus_btn.setCheckable(True)
         self.focus_btn.setObjectName("FocusBtn") 
         
+        # Top Row Layout - Update & Readme Links | Pin & Focus Rechts
         top_row = QHBoxLayout()
-        top_row.addStretch(1)
-        top_row.addWidget(self.pin_btn)
+        top_row.addWidget(self.update_btn) # Ganz links 1
+        top_row.addWidget(self.readme_btn) # Ganz links 2
+        top_row.addStretch(1)              # Platzhalter in der Mitte
+        top_row.addWidget(self.pin_btn)    # Rechts 1
         top_row.addSpacing(10)
-        top_row.addWidget(self.focus_btn)
+        top_row.addWidget(self.focus_btn)  # Rechts 2
         top_row.setContentsMargins(0, 0, 4, 0) 
 
         self.segments_view = SegmentsView(self.segments_model)
@@ -70,8 +122,9 @@ class MainWindow(QWidget):
         self.cards_layout.addWidget(self.timer_view, 1)
 
         self.root = QVBoxLayout(self)
-        self.root.setContentsMargins(MARGIN_STD, MARGIN_STD, MARGIN_STD, MARGIN_STD)
-        self.root.setSpacing(SPACING_STD)
+        # Reduced margins: top=4, sides=10, bottom=10, spacing=6
+        self.root.setContentsMargins(10, 4, 10, 10)
+        self.root.setSpacing(6)
         self.root.addLayout(top_row)
         self.root.addLayout(self.cards_layout, 1)
 
@@ -98,12 +151,15 @@ class MainWindow(QWidget):
         self.timer_view.btn_start.clicked.connect(self.engine.start)
         self.timer_view.btn_pause.clicked.connect(self.engine.pause)
         self.timer_view.btn_reset.clicked.connect(self.on_reset)
+        self.timer_view.btn_prev.clicked.connect(self.on_skip_prev)
+        self.timer_view.btn_next.clicked.connect(self.on_skip_next)
 
         self.focus_btn.toggled.connect(self.on_focus_toggled)
         self.pin_btn.toggled.connect(self.on_pin_toggled)
 
         self.engine.tick.connect(self.on_tick)
         self.segments_model.dataChanged.connect(lambda *_: self.on_segments_changed())
+        self.segments_model.modelReset.connect(lambda: self.on_segments_changed())
         self.segments_model.rowsInserted.connect(lambda *_: self.on_segments_changed())
         self.segments_model.rowsRemoved.connect(lambda *_: self.on_segments_changed())
         self.segments_model.rowsMoved.connect(lambda *_: self.on_segments_changed())
@@ -112,6 +168,10 @@ class MainWindow(QWidget):
         self._ensure_localized_defaults(saved_lang)
         self.apply_language(saved_lang, initial=True)
         
+        # Load Stylesheet with Asset Path
+        arrow_path = resource_path(os.path.join("timeflow_assets", "arrow_down.svg"))
+        self.setStyleSheet(get_stylesheet(arrow_path))
+
         self.on_segments_changed()
         self.on_tick(self._make_state_for_ui())
         
@@ -126,6 +186,67 @@ class MainWindow(QWidget):
 
         QTimer.singleShot(50, self._apply_responsive)
 
+    # --- Readme / Help ---
+    def on_readme_clicked(self):
+        """Öffnet das integrierte Hilfe-Fenster (Dialog)."""
+        if self.help_window is None:
+            self.help_window = HelpWindow(self)
+        
+        # Fenster neu laden und anzeigen
+        # Da wir jetzt die robuste Klasse verwenden, ist das Laden in __init__ passiert,
+        # aber wir können es bei Bedarf refreshen.
+        self.help_window.show()
+        self.help_window.raise_()
+        self.help_window.activateWindow()
+
+    # --- Updater Logic ---
+    def _setup_updater(self):
+        self.update_thread = QThread()
+        self.worker = UpdateWorker()
+        self.worker.moveToThread(self.update_thread)
+        self.update_thread.started.connect(self.worker.check_updates)
+        self.worker.updateAvailable.connect(self.on_update_available)
+        self.worker.downloadProgress.connect(self.on_download_progress)
+        self.worker.downloadFinished.connect(self.on_download_finished)
+        self.worker.error.connect(self.on_updater_error)
+        self.start_download_signal.connect(self.worker.start_download)
+        self.update_thread.start()
+
+    def on_update_available(self, version_tag, url, notes):
+        self._pending_update_url = url
+        self.update_btn.setText(f"🚀 Update {version_tag}")
+        self.update_btn.setVisible(True)
+
+    def on_update_clicked(self):
+        if self._pending_update_url:
+            self.update_btn.setEnabled(False)
+            self.update_btn.setText("0%")
+            self.start_download_signal.emit(self._pending_update_url)
+
+    def on_download_progress(self, percent):
+        self.update_btn.setText(f"{percent}%")
+
+    def on_download_finished(self, path):
+        self.update_btn.setText("✅")
+        QMessageBox.information(self, "Download fertig", f"Datei gespeichert unter:\n{path}")
+        folder = os.path.dirname(path)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
+        self.update_btn.setVisible(False)
+
+    def on_updater_error(self, msg):
+        if not self.update_btn.isEnabled(): 
+            self.update_btn.setEnabled(True)
+            self.update_btn.setText("❌ Retry")
+            print(f"Update Fehler: {msg}")
+
+    def closeEvent(self, event):
+        self.update_thread.quit()
+        self.update_thread.wait()
+        if self.help_window:
+            self.help_window.close()
+        super().closeEvent(event)
+
+    # --- Standard Methods ---
     def play_alarm(self):
         self.player.setPosition(0)
         self.player.play()
@@ -140,36 +261,34 @@ class MainWindow(QWidget):
         w = self.width()
         h = self.height()
         
-        # Grenzwerte prüfen
         is_tiny = (w < TINY_WIDTH_LIMIT) or (h < TINY_HEIGHT_LIMIT)
         compact_mode = (w < COMPACT_WIDTH_LIMIT) 
         focus_active = self.focus_btn.isChecked()
 
-        # 1. Sichtbarkeit steuern
         if is_tiny:
             self.segments_view.setVisible(False)
             self.focus_btn.setVisible(False)
             self.pin_btn.setVisible(False)
+            self.readme_btn.setVisible(False) 
+            self.update_btn.setVisible(False)
         else:
             self.segments_view.setVisible(not focus_active)
             self.focus_btn.setVisible(True)
             self.pin_btn.setVisible(True)
+            self.readme_btn.setVisible(True)
+            if self._pending_update_url:
+                self.update_btn.setVisible(True)
 
-        # 2. Layout Richtung (Responsive)
         if self.segments_view.isVisible() and compact_mode:
             self.cards_layout.setDirection(QBoxLayout.TopToBottom)
         else:
             self.cards_layout.setDirection(QBoxLayout.LeftToRight)
 
-        # 3. Margins anpassen
-        margin = MARGIN_COMPACT if is_tiny else MARGIN_STD
-        spacing = SPACING_COMPACT if is_tiny else SPACING_STD
-        self.root.setContentsMargins(margin, margin, margin, margin)
+        margin = MARGIN_COMPACT if is_tiny else 10  # Reduced side margins
+        spacing = SPACING_COMPACT if is_tiny else 6  # Reduced spacing
+        self.root.setContentsMargins(margin, 4, margin, margin)  # Reduced top margin
         self.root.setSpacing(spacing)
 
-        # 4. Updates an Views weitergeben
-        # FIX: Wir übergeben kein `scale` mehr und rufen kein `update_typography` manuell auf.
-        # Der TimerView macht das jetzt selbst via resizeEvent.
         self.timer_view.set_tiny_mode(is_tiny, self.current_lang())
         self.segments_view.update_layout_sizing(compact_mode)
         self._update_focus_button_text()
@@ -268,7 +387,8 @@ class MainWindow(QWidget):
     def add_segment(self):
         row = self.segments_model.rowCount()
         self.segments_model.insertRows(row, 1)
-        self.segments_model.setData(self.segments_model.index(row, 0), "Segment", Qt.EditRole)
+        s = get_strings(self.current_lang())
+        self.segments_model.setData(self.segments_model.index(row, 0), s.new_segment, Qt.EditRole)
         self.segments_view.view.selectRow(row)
 
     def remove_selected_segment(self):
@@ -285,6 +405,41 @@ class MainWindow(QWidget):
     def on_reset(self):
         self.engine.reset()
         self.on_tick(self._make_state_for_ui())
+
+    def on_skip_prev(self):
+        elapsed = self.engine.elapsed_seconds()
+        segs = self.segments_model.segments()
+        t = 0.0
+        target = 0.0
+        for i, seg in enumerate(segs):
+            dur = max(0.0, seg.minutes) * 60.0
+            if elapsed < t + dur + 0.1: # Current segment
+                # If more than 2 seconds passed in current segment, go to start of current
+                if (elapsed - t) > 2.0:
+                    target = t
+                elif i > 0:
+                    # Go to previous segment start
+                    prev_dur = max(0.0, segs[i-1].minutes) * 60.0
+                    target = max(0.0, t - prev_dur)
+                else:
+                    target = 0.0
+                break
+            t += dur
+        self.engine.seek(target)
+
+    def on_skip_next(self):
+        elapsed = self.engine.elapsed_seconds()
+        segs = self.segments_model.segments()
+        t = 0.0
+        target = self.segments_model.total_seconds()
+        for i, seg in enumerate(segs):
+            dur = max(0.0, seg.minutes) * 60.0
+            if elapsed < t + dur - 0.1:
+                # Target is the start of the next segment
+                target = t + dur
+                break
+            t += dur
+        self.engine.seek(target)
 
     def _make_state_for_ui(self):
         return TimerState(False, self.engine.elapsed_seconds(), self.segments_model.total_seconds())

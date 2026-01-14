@@ -1,4 +1,3 @@
-cat > .gitignore <<'EOF'
 # Python
 __pycache__/
 *.py[cod]
@@ -8,6 +7,7 @@ __pycache__/
 *.egg-info/
 .venv/
 .venv-build/
+.pytest_cache/
 
 # OS / Editor
 .DS_Store
@@ -17,13 +17,14 @@ Thumbs.db
 # Build outputs
 build/
 dist/
-*.spec
 *.dmg
 *.exe
 *.msi
 *.zip
 *.log
 
+# Allow specifically the hand-crafted spec file
+!TimeFlow.spec
+
 # Optional: local env files
 .env
-EOF

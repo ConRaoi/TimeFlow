@@ -25,6 +25,8 @@ class Strings:
     reset: str
     time_remaining: str
     time_elapsed: str
+    prev_segment: str
+    next_segment: str
     
     current_segment: str # Z.B. "Aktuell:"
     next_segment: str    # Z.B. "Nächstes:"
@@ -32,6 +34,17 @@ class Strings:
     col_name: str
     col_minutes: str
     default_segments: List[Tuple[str, float]]
+
+    # Presets
+    presets_label: str
+    save_preset: str
+    manage_presets: str
+    preset_name: str
+    preset_saved: str
+    preset_loaded: str
+    preset_deleted: str
+    confirm_delete: str
+    new_segment_default: str # Default name for new segments
 
 _STRINGS = {
     "en": Strings(
@@ -53,10 +66,21 @@ _STRINGS = {
         
         current_segment="Current:",
         next_segment="Next:",
+        prev_segment="Previous segment",
 
         col_name="Name",
         col_minutes="Minutes",
         default_segments=[("Intro", 3), ("Work", 20), ("Wrap-up", 5)],
+        
+        presets_label="Presets",
+        save_preset="Save",
+        manage_presets="Templates",
+        preset_name="Template Name",
+        preset_saved="Template saved!",
+        preset_loaded="Template loaded!",
+        preset_deleted="Template deleted!",
+        confirm_delete="Are you sure you want to delete this template?",
+        new_segment_default="New segment",
     ),
     "de": Strings(
         app_title="TimeFlow",
@@ -77,10 +101,21 @@ _STRINGS = {
         
         current_segment="Aktuell:",
         next_segment="Nächstes:",
+        prev_segment="Vorheriger Abschnitt",
 
         col_name="Name",
         col_minutes="Minuten",
         default_segments=[("Einstieg", 3), ("Arbeitsphase", 20), ("Abschluss", 5)],
+        
+        presets_label="Vorlagen",
+        save_preset="Speichern",
+        manage_presets="Vorlagen",
+        preset_name="Vorlagen-Name",
+        preset_saved="Vorlage gespeichert!",
+        preset_loaded="Vorlage geladen!",
+        preset_deleted="Vorlage gelöscht!",
+        confirm_delete="Möchten Sie diese Vorlage wirklich löschen?",
+        new_segment_default="Neuer Abschnitt",
     ),
     "es": Strings(
         app_title="TimeFlow",
@@ -101,10 +136,21 @@ _STRINGS = {
         
         current_segment="Actual:",
         next_segment="Siguiente:",
+        prev_segment="Segmento anterior",
 
         col_name="Nombre",
         col_minutes="Minutos",
         default_segments=[("Intro", 3), ("Trabajo", 20), ("Cierre", 5)],
+        
+        presets_label="Plantillas",
+        save_preset="Guardar",
+        manage_presets="Plantillas",
+        preset_name="Nombre de la plantilla",
+        preset_saved="¡Plantilla guardada!",
+        preset_loaded="¡Plantilla cargada!",
+        preset_deleted="¡Plantilla eliminada!",
+        confirm_delete="¿Seguro que quieres eliminar esta plantilla?",
+        new_segment_default="Nuevo segmento",
     ),
     "fr": Strings(
         app_title="TimeFlow",
@@ -125,10 +171,21 @@ _STRINGS = {
         
         current_segment="Actuel :",
         next_segment="Suivant :",
+        prev_segment="Segment précédent",
 
         col_name="Nom",
         col_minutes="Minutes",
         default_segments=[("Intro", 3), ("Travail", 20), ("Clôture", 5)],
+        
+        presets_label="Modèles",
+        save_preset="Enregistrer",
+        manage_presets="Modèles",
+        preset_name="Nom du modèle",
+        preset_saved="Modèle enregistré !",
+        preset_loaded="Modèle chargé !",
+        preset_deleted="Modèle supprimé !",
+        confirm_delete="Voulez-vous vraiment supprimer ce modèle ?",
+        new_segment_default="Nouveau segment",
     ),
 }
 

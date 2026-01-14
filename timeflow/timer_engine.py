@@ -2,6 +2,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from PySide6.QtCore import QObject, QTimer, Signal
+from .utils import clamp
 
 
 @dataclass
@@ -46,9 +47,9 @@ class TimerEngine(QObject):
     def pause(self) -> None:
         if not self._running:
             return
+        self._elapsed_before = self.elapsed_seconds()
         self._running = False
         self._timer.stop()
-        self._elapsed_before = self.elapsed_seconds()
         self._emit()
 
     def toggle(self) -> None:
@@ -61,6 +62,17 @@ class TimerEngine(QObject):
         if not self._running:
             return float(self._elapsed_before)
         return float(self._elapsed_before + (time.monotonic() - self._t0))
+
+    def seek(self, seconds: float) -> None:
+        """Sets the elapsed time to a specific value."""
+        was_running = self._running
+        if was_running:
+            self.pause()
+        self._elapsed_before = clamp(seconds, 0.0, self._total_s)
+        if was_running:
+            self.start()
+        else:
+            self._emit()
 
     def _on_timeout(self) -> None:
         if self._total_s > 0 and self.elapsed_seconds() >= self._total_s:
