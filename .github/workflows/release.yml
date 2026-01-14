@@ -43,18 +43,34 @@ jobs:
         if: matrix.os == 'macos-latest'
         shell: bash
         run: |
-          # Build .app using the spec file
+          # 1. App bauen
           pyinstaller TimeFlow.spec --noconfirm
 
-          # Create DMG with Applications link
+          # 2. Staging-Ordner für das DMG vorbereiten
           mkdir -p staging
+          
+          # App hineinkopieren
           cp -R "dist/TimeFlow.app" "staging/TimeFlow.app"
+          
+          # Link zum Programme-Ordner (damit Nutzer per Drag & Drop installieren können)
           ln -s /Applications "staging/Applications"
           
+          # WICHTIG: README sichtbar daneben legen
+          if [ -f "README.md" ]; then
+            cp README.md "staging/"
+          fi
+          
+          # OPTIONAL: Launcher-Skript kopieren (falls vorhanden)
+          if [ -f "Start TimeFlow.command" ]; then
+            cp "Start TimeFlow.command" "staging/"
+          fi
+          
+          # 3. DMG erstellen
           hdiutil create \
-            -volname "TimeFlow" \
+            -volname "TimeFlow Installer" \
             -srcfolder "staging" \
             -ov -format UDZO \
+            -fs HFS+ \
             "TimeFlow-macOS-${VERSION}.dmg"
 
       # -------------------------
@@ -64,11 +80,24 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          # Build .exe using the spec file (now produces a single file on Windows)
+          # 1. Build starten
           pyinstaller TimeFlow.spec --noconfirm
           
-          # Rename for clarity
-          Copy-Item "dist\TimeFlow.exe" "TimeFlow-Windows-$env:VERSION.exe"
+          # 2. DEBUG: Zeigen was da ist (falls Fehler auftreten)
+          Write-Host "Inhalt von dist:"
+          Get-ChildItem -Path dist -Recurse
+
+          # 3. ROBUSTE SUCHE: Finde die .exe, egal wie sie heißt oder wo sie liegt
+          $exe = Get-ChildItem -Path dist -Filter "*.exe" -Recurse | Select-Object -First 1
+
+          if ($exe) {
+              Write-Host "Gefunden: $($exe.FullName)"
+              # Umbenennen in das Release-Format (z.B. TimeFlow-Windows-1.0.5.exe)
+              Copy-Item $exe.FullName "TimeFlow-Windows-$env:VERSION.exe"
+          } else {
+              Write-Error "FEHLER: Keine .exe Datei im dist-Ordner gefunden!"
+              exit 1
+          }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
