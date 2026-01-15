@@ -20,6 +20,8 @@ warnings.filterwarnings("ignore", message=".*urllib3.*")
 
 # Set Qt to use offscreen rendering (headless mode)
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
+# Disable background threads for stability in tests
+os.environ["TIMEFLOW_SKIP_UPDATER"] = "1"
 
 # Optional pytest-qt support
 try:

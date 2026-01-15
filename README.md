@@ -134,6 +134,13 @@ Es gilt das Recht der Bundesrepublik Deutschland unter Ausschluss des UN-Kaufrec
 
 ---
 
+## 📝 Changelog
+
+- 2026.x: Date/Time window now scales responsively to window size; initial window size is set to fit content. (UI/UX)
+
+
+---
+
 # 🇬🇧 English
 
 ## 🎓 Quick Start Tutorial

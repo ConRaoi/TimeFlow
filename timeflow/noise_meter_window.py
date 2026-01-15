@@ -1,12 +1,15 @@
 from PySide6.QtCore import Qt, Signal, QRect, QPoint, QSize
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QSlider, QFrame, QSizePolicy
+    QSlider, QFrame, QSizePolicy, QMessageBox
 )
 from PySide6.QtGui import QPainter, QColor, QLinearGradient, QFont, QPen
 
 from .audio_processor import AudioProcessor
 from .i18n import get_strings
+from .styles import get_meter_bg_color
+from .noise_presets_manager import NoisePresetsManager
+from .presets_dialog import SavePresetDialog, ManagePresetsDialog
 
 class LevelMeterWidget(QWidget):
     """
@@ -35,9 +38,10 @@ class LevelMeterWidget(QWidget):
         h = self.height()
         padding = 6
         
-        # Hintergrund mit subtilem Glass-Effekt
+        # Hintergrund mit subtilem Glass-Effekt - Theme-aware
         bg_rect = QRect(padding, padding, w - 2*padding, h - 2*padding)
-        painter.setBrush(QColor("#F2F2F7"))
+        is_dark = self.palette().window().color().lightness() < 128
+        painter.setBrush(get_meter_bg_color(is_dark))
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(bg_rect, 16, 16)
 
@@ -80,47 +84,45 @@ class NoiseMeterWindow(QFrame):
     def __init__(self, parent=None, lang_code="de"):
         super().__init__(parent)
         self.setObjectName("Card") # Nutzt den Card-Style
-        self.setWindowFlags(Qt.Window | Qt.Tool | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
         self.setWindowTitle("Noise Meter")
         
         self.lang_code = lang_code
+        self.presets_manager = NoisePresetsManager()
         self.processor = AudioProcessor(self)
         self.processor.levelUpdated.connect(self._on_level_updated)
         
         self._setup_ui()
+        self._load_last_settings()
         self.retranslate(lang_code)
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(30, 30, 30, 30) # Mehr Padding
-        root.setSpacing(24) # Mehr Spacing
+        root.setSpacing(18) # Leichter reduziertes Außen-Spacing, damit Meter mehr Raum erhält
 
         # Header
         header = QHBoxLayout()
-        self.title_label = QLabel("🎤 Noise Meter")
+        self.title_label = QLabel("🚦 Noise Meter")
         self.title_label.setObjectName("CardTitle")
         self.title_label.setStyleSheet("font-size: 24px; font-weight: 800; padding-bottom: 0;")
         header.addWidget(self.title_label)
         header.addStretch()
-        
-        self.close_btn = QPushButton("✕")
-        self.close_btn.setFixedSize(32, 32) # Größerer Button
-        self.close_btn.setStyleSheet("""
+
+        self.btn_presets = QPushButton("💾")
+        self.btn_presets.setFixedSize(28, 28)
+        self.btn_presets.setStyleSheet("""
             QPushButton {
-                border-radius: 16px; 
-                font-weight: bold; 
-                background: #F2F2F7; 
-                color: #8E8E93;
-                font-size: 14px;
+                background: transparent;
+                font-size: 18px;
+                border: none;
+                border-radius: 6px;
                 padding: 0;
             }
-            QPushButton:hover {
-                background: #E5E5EA;
-                color: #1C1C1E;
-            }
+            QPushButton:hover { background: rgba(0,0,0,0.05); }
         """)
-        self.close_btn.clicked.connect(self.hide)
-        header.addWidget(self.close_btn)
+        self.btn_presets.clicked.connect(self._on_presets_clicked)
+        header.addWidget(self.btn_presets)
         root.addLayout(header)
 
         # Meter
@@ -129,16 +131,19 @@ class NoiseMeterWindow(QFrame):
 
         # Settings
         settings = QVBoxLayout()
-        settings.setSpacing(12)
+        # Weniger Abstand zwischen Sensitivity und Limit, damit die Slider "nebensächlich" wirken
+        settings.setSpacing(8)
         
         # Sensitivity
         sens_row = QHBoxLayout()
         self.sens_label = QLabel("Sensitivity")
-        self.sens_label.setStyleSheet("font-size: 16px; font-weight: 600; min-width: 120px;")
+        # Kleinere Min-Breite, damit das Label nicht dominant ist
+        self.sens_label.setStyleSheet("font-size: 16px; font-weight: 600; min-width: 80px;")
         self.sens_slider = QSlider(Qt.Horizontal)
         self.sens_slider.setRange(1, 100) # 0.1x to 10.0x
         self.sens_slider.setValue(40) # Startet bei 4.0x (solider Mittelwert)
-        self.sens_slider.setMinimumHeight(40)
+        # Flacherer Slider, weniger auffällig
+        self.sens_slider.setMinimumHeight(28)
         self.sens_slider.valueChanged.connect(self._on_sens_changed)
         sens_row.addWidget(self.sens_label)
         sens_row.addWidget(self.sens_slider)
@@ -147,25 +152,33 @@ class NoiseMeterWindow(QFrame):
         # Threshold (Limit)
         limit_row = QHBoxLayout()
         self.limit_label = QLabel("Limit")
-        self.limit_label.setStyleSheet("font-size: 16px; font-weight: 600; min-width: 120px;")
+        self.limit_label.setStyleSheet("font-size: 16px; font-weight: 600; min-width: 80px;")
         self.limit_slider = QSlider(Qt.Horizontal)
         self.limit_slider.setRange(10, 95)
         self.limit_slider.setValue(70)
-        self.limit_slider.setMinimumHeight(40)
+        self.limit_slider.setMinimumHeight(28)
         self.limit_slider.valueChanged.connect(self._on_limit_changed)
         limit_row.addWidget(self.limit_label)
         limit_row.addWidget(self.limit_slider)
         settings.addLayout(limit_row)
 
-        root.addLayout(settings)
+        # Gebe dem Meter mehr vertikalen Platz (größere Stretch-Relation)
+        root.addWidget(self.meter, 3)
+        root.addLayout(settings, 1)
 
     def retranslate(self, lang_code: str):
         self.lang_code = lang_code
         s = get_strings(lang_code)
-        self.title_label.setText(f"🎤 {s.noise_meter}")
+        self.title_label.setText(f"🚦 {s.noise_meter}")
         self.sens_label.setText(s.sensitivity)
         self.limit_label.setText(s.limit)
         self.setWindowTitle(s.noise_meter)
+
+    def refresh_theme(self, is_dark: bool):
+        """Aktualisiert die Styles des Fensters bei Theme-Wechsel."""
+        # Da wir ObjectNames nutzen, wird das Haupt-Stylesheet von MainWindow 
+        # das meiste regeln, aber wir können hier spezifische Anpassungen machen.
+        self.update() # Triggert Neurechnen des LevelMeterWidget backgrounds
 
     def _on_level_updated(self, level: float):
         self.meter.set_level(level)
@@ -180,9 +193,80 @@ class NoiseMeterWindow(QFrame):
 
     def _on_sens_changed(self, value):
         self.processor.set_sensitivity(value / 10.0)
+        self._save_last_settings()
 
     def _on_limit_changed(self, value):
         self.meter.set_threshold(float(value))
+        self._save_last_settings()
+
+    def _on_presets_clicked(self):
+        """Öffnet das Preset-Menü."""
+        from PySide6.QtWidgets import QMenu, QMessageBox
+        from PySide6.QtGui import QAction
+        
+        s = get_strings(self.lang_code)
+        menu = QMenu(self)
+        
+        save_action = QAction(f"💾 {s.save_preset}", self)
+        save_action.triggered.connect(self._save_preset)
+        
+        manage_action = QAction(f"📂 {s.manage_presets}", self)
+        manage_action.triggered.connect(self._manage_presets)
+        
+        menu.addAction(save_action)
+        menu.addAction(manage_action)
+        
+        # Position am Button anzeigen
+        menu.exec(self.btn_presets.mapToGlobal(QPoint(0, self.btn_presets.height())))
+
+    def _save_preset(self):
+        s = get_strings(self.lang_code)
+        dlg = SavePresetDialog(self, self.lang_code)
+        if dlg.exec():
+            name = dlg.preset_name
+            if name:
+                self.presets_manager.save_preset(
+                    name, 
+                    self.sens_slider.value(), 
+                    self.limit_slider.value()
+                )
+                QMessageBox.information(self, s.app_title, s.preset_saved)
+
+    def _manage_presets(self):
+        s = get_strings(self.lang_code)
+        # data_key="sensitivity" -> actually we want the whole object
+        dlg = ManagePresetsDialog(self.presets_manager, self, self.lang_code, data_key="none")
+        if dlg.exec():
+            # dlg.loaded_data contains {name: ..., sensitivity: ..., limit: ...}
+            # because we passed data_key="none" (ManagePresetsDialog refactored to handle this)
+            data = dlg.loaded_data
+            if data and "sensitivity" in data:
+                # Blockieren der Signale während des Ladens um doppeltes Speichern zu vermeiden
+                self.sens_slider.blockSignals(True)
+                self.limit_slider.blockSignals(True)
+                
+                self.sens_slider.setValue(data["sensitivity"])
+                self.limit_slider.setValue(data["limit"])
+                self.processor.set_sensitivity(data["sensitivity"] / 10.0)
+                self.meter.set_threshold(float(data["limit"]))
+                
+                self.sens_slider.blockSignals(False)
+                self.limit_slider.blockSignals(False)
+                
+                QMessageBox.information(self, s.app_title, s.preset_loaded)
+
+    def _save_last_settings(self):
+        self.presets_manager.save_last_settings(
+            self.sens_slider.value(),
+            self.limit_slider.value()
+        )
+
+    def _load_last_settings(self):
+        sens, limit = self.presets_manager.load_last_settings()
+        self.sens_slider.setValue(sens)
+        self.limit_slider.setValue(limit)
+        self.processor.set_sensitivity(sens / 10.0)
+        self.meter.set_threshold(float(limit))
 
     def showEvent(self, event):
         super().showEvent(event)

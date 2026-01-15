@@ -157,7 +157,7 @@ class SegmentsView(Card):
         s = get_strings(lang_code)
         dlg = ManagePresetsDialog(self.presets_manager, self, lang_code)
         if dlg.exec():
-            loaded = dlg.loaded_segments
+            loaded = dlg.loaded_data
             if loaded:
                 from .segments_model import Segment
                 new_segs = []

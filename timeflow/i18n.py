@@ -50,6 +50,8 @@ class Strings:
     noise_meter: str
     sensitivity: str
     limit: str
+    # Date & Time
+    date_time: str
 
 _STRINGS = {
     "en": Strings(
@@ -89,6 +91,7 @@ _STRINGS = {
         noise_meter="Noise Meter",
         sensitivity="Sensitivity",
         limit="Limit",
+        date_time="Date & Time",
     ),
     "de": Strings(
         app_title="TimeFlow",
@@ -127,6 +130,7 @@ _STRINGS = {
         noise_meter="Lärmampel",
         sensitivity="Empfindlichkeit",
         limit="Grenzwert",
+        date_time="Datum & Uhrzeit",
     ),
     "es": Strings(
         app_title="TimeFlow",
@@ -165,6 +169,7 @@ _STRINGS = {
         noise_meter="Monitor de ruido",
         sensitivity="Sensibilidad",
         limit="Límite",
+        date_time="Fecha y hora",
     ),
     "fr": Strings(
         app_title="TimeFlow",
@@ -203,6 +208,7 @@ _STRINGS = {
         noise_meter="Moniteur de bruit",
         sensitivity="Sensibilité",
         limit="Limite",
+        date_time="Date et heure",
     ),
 }
 

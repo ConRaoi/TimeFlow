@@ -6,9 +6,6 @@ from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QBoxLayout, 
     QAbstractItemView, QApplication, QMessageBox
 )
-from PySide6.QtGui import QFont, QDesktopServices
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-
 from .i18n import get_strings
 from .timer_engine import TimerEngine, TimerState
 from .segments_model import SegmentsModel, Segment
@@ -17,6 +14,7 @@ from .views import SegmentsView, TimerView
 from .updater import UpdateWorker
 from .help_window import HelpWindow
 from .noise_meter_window import NoiseMeterWindow
+from .datetime_window import DateTimeWindow
 from .styles import (
     TINY_WIDTH_LIMIT, TINY_HEIGHT_LIMIT, 
     COMPACT_WIDTH_LIMIT, COMPACT_HEIGHT_LIMIT,
@@ -24,6 +22,8 @@ from .styles import (
     SPACING_STD, SPACING_COMPACT,
     get_stylesheet
 )
+from PySide6.QtGui import QFont, QDesktopServices, QGuiApplication, QPalette
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 class MainWindow(QWidget):
     start_download_signal = Signal(str)
@@ -39,6 +39,7 @@ class MainWindow(QWidget):
         self._last_focus_size = QSize(TINY_WIDTH_LIMIT, 450) 
         self.help_window = None 
         self.noise_window = None 
+        self.date_window = None
 
         # --- Sound Setup ---
         self.player = QMediaPlayer()
@@ -52,9 +53,13 @@ class MainWindow(QWidget):
         self.engine.finished.connect(self.play_alarm)
 
         # --- Updater Setup ---
-        self._setup_updater()
+        if os.environ.get("TIMEFLOW_SKIP_UPDATER") != "1":
+            self._setup_updater()
+        else:
+            self.update_thread = None
 
         # --- UI Setup ---
+        self._setup_theme()
         
         # 1. Update Button (Links)
         self.update_btn = QPushButton("🚀")
@@ -114,7 +119,27 @@ class MainWindow(QWidget):
         """)
         self.bug_btn.clicked.connect(self.on_bug_report_clicked)
 
-        # 4. Noise Meter Button
+        # 4. Date & Time Button (Neu)
+        self.date_btn = QPushButton("📅")
+        self.date_btn.setToolTip("Datum & Uhrzeit")
+        self.date_btn.setFixedWidth(40)
+        self.date_btn.setObjectName("HeaderBtn")
+        self.date_btn.setStyleSheet("""
+            QPushButton { 
+                background: transparent; 
+                color: #636366;
+                font-size: 20px; 
+                border: none;
+                border-radius: 8px; 
+            }
+            QPushButton:hover { 
+                background: rgba(0,0,0,0.05); 
+                color: #000;
+            }
+        """)
+        self.date_btn.clicked.connect(self.on_date_clicked)
+
+        # 5. Noise Meter Button
         self.noise_btn = QPushButton("🎤")
         self.noise_btn.setToolTip("Lärmampel")
         self.noise_btn.setFixedWidth(40)
@@ -144,17 +169,20 @@ class MainWindow(QWidget):
         self.focus_btn.setCheckable(True)
         self.focus_btn.setObjectName("FocusBtn") 
         
-        # Top Row Layout - Update & Readme Links | Pin & Focus Rechts
+        # Top Row Layout - Extras Links | Tools & Window Controls Rechts
         top_row = QHBoxLayout()
-        top_row.addWidget(self.update_btn) # Ganz links 1
-        top_row.addWidget(self.readme_btn) # Ganz links 2
-        top_row.addWidget(self.bug_btn)    # Ganz links 3
+        top_row.addWidget(self.update_btn) # Ganz links 
+        top_row.addWidget(self.readme_btn)
+        top_row.addWidget(self.bug_btn)
         top_row.addStretch(1)              # Platzhalter in der Mitte
-        top_row.addWidget(self.noise_btn)  # Rechts 0
-        top_row.addWidget(self.pin_btn)    # Rechts 1
+        
+        # Tools (Rechts gruppiert)
+        top_row.addWidget(self.date_btn)   # Rechts 0
+        top_row.addWidget(self.noise_btn)  # Rechts 1
+        top_row.addWidget(self.pin_btn)    # Rechts 2
         top_row.addSpacing(10)
-        top_row.addWidget(self.focus_btn)  # Rechts 2
-        top_row.setContentsMargins(0, 0, 4, 0) 
+        top_row.addWidget(self.focus_btn)  # Rechts 3
+        top_row.setContentsMargins(0, 0, 4, 0)
 
         self.segments_view = SegmentsView(self.segments_model)
         self.timer_view = TimerView()
@@ -211,9 +239,8 @@ class MainWindow(QWidget):
         self._ensure_localized_defaults(saved_lang)
         self.apply_language(saved_lang, initial=True)
         
-        # Load Stylesheet with Asset Path
-        arrow_path = resource_path(os.path.join("timeflow_assets", "arrow_down.svg"))
-        self.setStyleSheet(get_stylesheet(arrow_path))
+        # Load Stylesheet with Asset Path and Theme
+        self.refresh_theme()
 
         self.on_segments_changed()
         self.on_tick(self._make_state_for_ui())
@@ -251,14 +278,53 @@ class MainWindow(QWidget):
         """Öffnet das Fenster für den Lärmwächter."""
         if self.noise_window is None:
             self.noise_window = NoiseMeterWindow(self, self.current_lang())
+            # Initiales Theme setzen
+            self.noise_window.refresh_theme(self.is_dark_mode())
         
-        if self.noise_window.isVisible():
-            self.noise_window.hide()
+        self._toggle_window(self.noise_window)
+
+    def on_date_clicked(self):
+        """Öffnet das Fenster für Datum & Uhrzeit."""
+        if self.date_window is None:
+            self.date_window = DateTimeWindow(None, self.current_lang())
+            self.date_window.refresh_theme(self.is_dark_mode())
+        
+        self._toggle_window(self.date_window)
+
+    def _toggle_window(self, window):
+        """Hilfsmethode zum Umschalten von Zusatzfenstern."""
+        if window.isVisible():
+            window.hide()
         else:
-            self.noise_window.show()
-            # Positionierung: In der Nähe des Buttons oder Zentriert
-            self.noise_window.raise_()
-            self.noise_window.activateWindow()
+            window.show()
+            window.raise_()
+            window.activateWindow()
+
+    # --- Theme Logic ---
+    def _setup_theme(self):
+        """Initialisiert die Theme-Überwachung."""
+        hints = QGuiApplication.styleHints()
+        hints.colorSchemeChanged.connect(self.refresh_theme)
+
+    def is_dark_mode(self) -> bool:
+        """Prüft ob das System im Dark Mode ist."""
+        return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+
+    def refresh_theme(self):
+        """Aktualisiert das Stylesheet basierend auf dem aktuellen System-Theme."""
+        is_dark = self.is_dark_mode()
+        arrow_path = resource_path(os.path.join("timeflow_assets", "arrow_down.svg"))
+        self.setStyleSheet(get_stylesheet(arrow_path, is_dark))
+        
+        if self.noise_window:
+            self.noise_window.refresh_theme(is_dark)
+        
+        if self.date_window:
+            self.date_window.refresh_theme(is_dark)
+        
+        if self.help_window:
+            # Das Hilfe-Fenster nutzt Standard-HTML, wir könnten es hier auch updaten
+            pass
 
     # --- Updater Logic ---
     def _setup_updater(self):
@@ -301,8 +367,9 @@ class MainWindow(QWidget):
             print(f"Update Fehler: {msg}")
 
     def closeEvent(self, event):
-        self.update_thread.quit()
-        self.update_thread.wait()
+        if self.update_thread:
+            self.update_thread.quit()
+            self.update_thread.wait()
         if self.help_window:
             self.help_window.close()
         super().closeEvent(event)
@@ -338,11 +405,14 @@ class MainWindow(QWidget):
             self.segments_view.setVisible(not focus_active)
             self.focus_btn.setVisible(True)
             self.pin_btn.setVisible(True)
-            self.readme_btn.setVisible(True)
-            self.bug_btn.setVisible(True)
-            self.noise_btn.setVisible(True)
-            if self._pending_update_url:
-                self.update_btn.setVisible(True)
+            
+            # Optionale Buttons nur anzeigen, wenn NICHT im Fokus-Modus
+            extras_visible = not focus_active
+            self.date_btn.setVisible(extras_visible)
+            self.readme_btn.setVisible(extras_visible)
+            self.bug_btn.setVisible(extras_visible)
+            self.noise_btn.setVisible(extras_visible)
+            self.update_btn.setVisible(extras_visible and bool(self._pending_update_url))
 
         if self.segments_view.isVisible() and compact_mode:
             self.cards_layout.setDirection(QBoxLayout.TopToBottom)
@@ -420,6 +490,8 @@ class MainWindow(QWidget):
         
         if self.noise_window:
             self.noise_window.retranslate(lang_code)
+        if self.date_window:
+            self.date_window.retranslate(lang_code)
             
         self._apply_responsive()
 

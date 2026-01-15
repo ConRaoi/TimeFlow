@@ -9,7 +9,20 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  # 1. Erstellt erst das Release (leer), damit die anderen Jobs dort hineinladen können
+  create_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
+
+  # 2. Baut die Apps und lädt sie DIREKT ins Release (ohne Storage-Verbrauch)
+  build_and_upload:
+    needs: create_release
     strategy:
       matrix:
         os: [macos-latest, windows-latest]
@@ -37,7 +50,7 @@ jobs:
           echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
 
       # -------------------------
-      # Build on macOS -> .app and .dmg
+      # Build on macOS -> .dmg
       # -------------------------
       - name: Build (macOS)
         if: matrix.os == 'macos-latest'
@@ -46,21 +59,17 @@ jobs:
           # 1. App bauen
           pyinstaller TimeFlow.spec --noconfirm
 
-          # 2. Staging-Ordner für das DMG vorbereiten
+          # 2. Staging für DMG vorbereiten
           mkdir -p staging
-          
-          # App hineinkopieren
           cp -R "dist/TimeFlow.app" "staging/TimeFlow.app"
-          
-          # Link zum Programme-Ordner (damit Nutzer per Drag & Drop installieren können)
           ln -s /Applications "staging/Applications"
           
-          # WICHTIG: README sichtbar daneben legen
+          # README sichtbar daneben legen
           if [ -f "README.md" ]; then
             cp README.md "staging/"
           fi
           
-          # OPTIONAL: Launcher-Skript kopieren (falls vorhanden)
+          # Launcher-Skript dazu (falls vorhanden)
           if [ -f "Start TimeFlow.command" ]; then
             cp "Start TimeFlow.command" "staging/"
           fi
@@ -80,45 +89,28 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          # 1. Build starten
+          # 1. App bauen
           pyinstaller TimeFlow.spec --noconfirm
           
-          # 2. DEBUG: Zeigen was da ist (falls Fehler auftreten)
-          Write-Host "Inhalt von dist:"
-          Get-ChildItem -Path dist -Recurse
-
-          # 3. ROBUSTE SUCHE: Finde die .exe, egal wie sie heißt oder wo sie liegt
+          # 2. Datei finden & umbenennen (Robuste Suche)
           $exe = Get-ChildItem -Path dist -Filter "*.exe" -Recurse | Select-Object -First 1
-
           if ($exe) {
               Write-Host "Gefunden: $($exe.FullName)"
-              # Umbenennen in das Release-Format (z.B. TimeFlow-Windows-1.0.5.exe)
               Copy-Item $exe.FullName "TimeFlow-Windows-$env:VERSION.exe"
           } else {
               Write-Error "FEHLER: Keine .exe Datei im dist-Ordner gefunden!"
               exit 1
           }
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: artifacts-${{ matrix.os }}
-          path: |
-            TimeFlow-macOS-*.dmg
-            TimeFlow-Windows-*.exe
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create GitHub Release and upload
+      # -------------------------
+      # Upload DIRECTLY to Release
+      # -------------------------
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
+          # Lädt alles hoch, was nach DMG oder EXE aussieht
           files: |
-            artifacts/**/TimeFlow-macOS-*.dmg
-            artifacts/**/TimeFlow-Windows-*.exe
+            TimeFlow-macOS-*.dmg
+            TimeFlow-Windows-*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

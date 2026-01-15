@@ -25,6 +25,8 @@ def test_imports():
         from timeflow import views
         from timeflow import styles
         from timeflow import delegates
+        from timeflow import datetime_window
+        from timeflow import noise_meter_window
     except ImportError as e:
         pytest.fail(f"Import fehlgeschlagen: {e}")
     except SyntaxError as e:
