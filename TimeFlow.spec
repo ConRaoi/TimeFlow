@@ -71,7 +71,7 @@ if sys.platform == 'darwin':
             'NSHighResolutionCapable': 'True',
             'LSBackgroundOnly': 'False',
             'NSMicrophoneUsageDescription': 'TimeFlow benötigt Zugriff auf das Mikrofon für die Lärmampel.',
-            'CFBundleShortVersionString': '1.0.5',
+            'CFBundleShortVersionString': '1.0.8',
         }
     )
 
